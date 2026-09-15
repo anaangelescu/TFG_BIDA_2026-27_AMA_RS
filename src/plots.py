@@ -5,7 +5,7 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 
-from src.config import FIGURES_DIR, RUL_CAP, SENSOR_COLS, SETTING_COLS
+from src.config import FIGURES_DIR, ROLL_WINDOW, RUL_CAP, SENSOR_COLS
 
 
 def save(fig: plt.Figure, name: str) -> None:
@@ -64,15 +64,15 @@ def plot_settings_scatter(train_df: pd.DataFrame, subset: str, regime: pd.Series
     return fig
 
 
-def plot_before_after_regime(raw_df: pd.DataFrame, feat_df: pd.DataFrame, unit: int, sensor: str, subset: str) -> plt.Figure:
+def plot_before_after_regime(raw_df: pd.DataFrame, feat_df: pd.DataFrame, unit: int, sensor: str, subset: str, window: int = ROLL_WINDOW) -> plt.Figure:
     """Raw vs within-regime z-scored trace of one sensor for one engine (FD002/FD004)."""
     fig, axes = plt.subplots(1, 2, figsize=(11, 3.2))
-    r = raw_df[raw_df["unit"] == unit]
-    f = feat_df[feat_df["unit"] == unit]
+    r = raw_df[raw_df["unit"] == unit].sort_values("cycle")
+    f = feat_df[feat_df["unit"] == unit].sort_values("cycle")
     axes[0].scatter(r["cycle"], r[sensor], s=6, c=f["regime"], cmap="tab10")
     axes[0].set(title=f"{sensor} raw (colour = regime)", xlabel="cycle")
     axes[1].plot(f["cycle"], f[sensor], lw=0.8, label="z-scored within regime")
-    axes[1].plot(f["cycle"], f[f"{sensor}_rm{10}"] if f"{sensor}_rm10" in f else f[sensor], lw=1.5, label="rolling mean")
+    axes[1].plot(f["cycle"], f[f"{sensor}_rm{window}"], lw=1.5, label=f"rolling mean ({window} cycles)")
     axes[1].set(title=f"{sensor} after regime normalisation", xlabel="cycle")
     axes[1].legend(fontsize=8)
     fig.suptitle(f"{subset}: unit {unit}")
@@ -96,15 +96,21 @@ def plot_pred_vs_true(y_true, y_pred, lower, upper, title: str) -> plt.Figure:
     return fig
 
 
-def plot_calibration(levels, coverages: dict[str, list[float]], title: str) -> plt.Figure:
-    """Empirical coverage against nominal confidence level, one line per method."""
-    fig, ax = plt.subplots(figsize=(5, 4.5))
-    ax.plot([0.4, 1], [0.4, 1], "k--", lw=1, label="perfect calibration")
-    for name, cov in coverages.items():
-        ax.plot(levels, cov, "o-", label=name)
-    ax.set(xlabel="nominal confidence level", ylabel="empirical coverage", title=title, xlim=(0.45, 1), ylim=(0.4, 1.02))
-    ax.grid(alpha=0.3)
-    ax.legend(fontsize=8)
+def plot_calibration(levels, panels: dict[str, dict[str, list[float]]], title: str) -> plt.Figure:
+    """Empirical coverage against nominal confidence level.
+
+    `panels` maps a panel title (e.g. an evaluation set) to {method: coverages per level}.
+    """
+    fig, axes = plt.subplots(1, len(panels), figsize=(5 * len(panels), 4.5), squeeze=False)
+    for ax, (panel, coverages) in zip(axes[0], panels.items()):
+        ax.plot([0.4, 1], [0.4, 1], "k--", lw=1, label="perfect calibration")
+        for name, cov in coverages.items():
+            ax.plot(levels, cov, "o-", label=name)
+        ax.set(xlabel="nominal confidence level", ylabel="empirical coverage", title=panel, xlim=(0.45, 1), ylim=(0.4, 1.02))
+        ax.grid(alpha=0.3)
+        ax.legend(fontsize=8)
+    fig.suptitle(title)
+    fig.tight_layout()
     return fig
 
 

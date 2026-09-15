@@ -3,7 +3,7 @@
 **How much can we trust a prediction of engine life?**
 Calibrated uncertainty for turbofan Remaining Useful Life (RUL) prediction on the NASA C-MAPSS dataset.
 
-Bachelor's thesis (TFG) — [Your name], [Degree], [University], 2026–2027.
+Bachelor's thesis (TFG) — Ana Maria Angelescu & Rune Snauwaert, Business Intelligence and Data Analysis, La Salle Barcelona 2026–2027.
 
 ---
 
@@ -123,6 +123,7 @@ These are fixed for the entire project and stated in the thesis. Changing any of
 8. **Official-test predictions** use the last cycle (or last window) of each test engine.
 9. **Seeds.** Every random operation takes an explicit seed. Every experiment runs for seeds 0–9.
 10. **Every run is logged** as one row in `results/runs.csv`: `subset, model, uq_method, seed, rmse, nasa_score, coverage, mean_width, coverage_near_failure, n_test, timestamp, git_hash`.
+    *Week-1 implementation (`src/results.py`):* `subset, model, seed, rmse, nasa_score, coverage, mean_width, n_test` — the UQ method is folded into `model` (`lgbm_scp`, `lgbm_cqr`); the remaining columns are added when the full grid starts. Only official-test results are logged; internal-test numbers live in the notebooks.
 11. **Conformalization on separate engines.** Rows within an engine are a time series and not exchangeable; engines are approximately exchangeable. Calibration therefore uses whole engines, evaluation is per engine, and this assumption is stated in the thesis.
 
 ---
@@ -148,34 +149,38 @@ Reference points on FD001 official test: RMSE ≈ 12–14 for strong deep models
 ## 6. Repository layout
 
 ```
-tfg-rul-uncertainty/
-├── data/
-│   ├── raw/                  # the 12 NASA txt files, read-only, not committed (see .gitignore)
-│   └── processed/            # parquet outputs of src/features.py
-├── src/
-│   ├── load.py               # load_subset(name) -> train_df, test_df, rul_df; asserts counts
-│   ├── features.py           # RUL labelling, sensor dropping, regime normalization, windows
-│   ├── models.py             # linear, LightGBM, LSTM with a common fit/predict interface
-│   ├── conformal.py          # SCP and CQR wrappers around MAPIE v1
-│   ├── evaluate.py           # RMSE, NASA score, coverage, width, near-failure coverage
-│   ├── alert_sim.py          # alert policy simulation (point vs lower-bound triggers)
-│   └── run.py                # one experiment = (subset, model, uq_method, seed) -> one row
+v1/                               # this repository (the raw data lives OUTSIDE it, see §7)
+├── src/                          # installable package: `pip install -e .` then `import src.<module>`
+│   ├── config.py                 # RUL_CAP=125, SEED=0, ROLL_WINDOW=10, N_REGIMES=6, paths, data-dir lookup
+│   ├── load.py                   # load_subset(name) -> train_df, test_df, rul_df; asserts counts; `python -m src.load --check`
+│   ├── features.py               # add_rul, FeaturePipeline (regimes, z-score, constant sensors, rolling stats), build_features -> X, y, groups
+│   ├── split.py                  # split_engines: 70/15/15 BY ENGINE with GroupShuffleSplit
+│   ├── models.py                 # LinearRegression, untuned LGBMRegressor, LightGBM quantile models
+│   ├── conformal.py              # fit_scp / fit_cqr around MAPIE v1, interval prediction clipped to [0, RUL_CAP]
+│   ├── evaluate.py               # rmse, nasa_score, coverage, mean_width
+│   ├── results.py                # append_run -> results/runs.csv (one row per subset, model, seed)
+│   ├── experiment.py             # prepare / fit_point_models / fit_conformal / run_seed: one (subset, seed) end to end
+│   └── plots.py                  # EDA figures and the interval diagnostics
 ├── notebooks/
-│   ├── 01_eda.ipynb
-│   ├── 02_baselines.ipynb
-│   ├── 03_conformal.ipynb
-│   ├── 04_lstm.ipynb
-│   └── 05_analysis.ipynb     # statistical tests and thesis figures
-├── results/
-│   └── runs.csv              # append-only log of every run
-├── figures/
+│   ├── 01_eda.ipynb              # step 2: FD001 then FD002
+│   ├── 02_baselines.ipynb        # steps 3-4: pipeline check, Linear vs LightGBM, official test
+│   ├── 03_conformal.ipynb        # step 5: SCP vs CQR, what happens inside each
+│   ├── 04_interval_plots.ipynb   # step 6: pred-vs-true with intervals, calibration curve, width vs RUL
+│   ├── 05_seed_variability.ipynb # step 7: seeds 0-4, mean ± std
+│   ├── 06_lstm.ipynb             # (planned)
+│   └── 07_analysis.ipynb         # (planned) statistical tests and thesis figures
 ├── tests/
-│   ├── test_labels.py        # RUL cap, per-engine split has no leakage
-│   └── test_metrics.py       # NASA score, coverage against hand-computed values
-├── requirements.txt          # pinned versions
-├── .gitignore                # data/raw, data/processed, *.pkl, mlruns/
+│   ├── test_labels.py            # RUL cap, engine-level split, pipeline fitted on train only, constant sensors
+│   └── test_metrics.py           # NASA score, RMSE, coverage, width against hand-computed values
+├── results/runs.csv              # log of every run (re-running a notebook replaces its rows, key = subset, model, seed)
+├── figures/                      # every figure produced by the notebooks
+├── pyproject.toml                # package metadata, pytest config
+├── requirements.txt              # pinned versions used for every logged number
+├── .gitignore                    # .venv, data/, caches
 └── README.md
 ```
+
+Planned for later phases: `src/alert_sim.py` (alert-policy simulation) and `src/run.py` (CLI over the full grid).
 
 ---
 
@@ -183,35 +188,24 @@ tfg-rul-uncertainty/
 
 ```bash
 git clone <this repo>
-cd tfg-rul-uncertainty
+cd v1
 python -m venv .venv && source .venv/bin/activate     # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
+pip install -e .                                      # makes `import src.…` work from notebooks and tests
 
-# data
-mkdir -p data/raw
-curl -L -o cmapss.zip "https://phm-datasets.s3.amazonaws.com/NASA/6.+Turbofan+Engine+Degradation+Simulation+Data+Set.zip"
-unzip cmapss.zip -d data/raw && rm cmapss.zip
+# data - the 12 txt files are looked up in this order (src/config.py: find_data_dir):
+#   $CMAPSS_DATA_DIR  ->  v1/data/raw  ->  ../data/raw  ->  ../data/<NASA folder as unzipped>
+# so either unzip the archive into data/raw/ or keep it next to the repo (as on the development machine)
 python -m src.load --check        # asserts row and unit counts for all subsets
 
-# tests
-pytest tests/
+# tests and notebooks
+pytest
+jupyter nbconvert --to notebook --execute --inplace notebooks/01_eda.ipynb   # or open them in VS Code with the .venv kernel
 ```
 
-`requirements.txt` (pin exact versions on first install):
-```
-numpy
-pandas
-scikit-learn
-lightgbm
-torch
-mapie>=1.4
-matplotlib
-seaborn
-scipy
-tqdm
-pytest
-mlflow        # optional experiment tracking
-```
+`requirements.txt` pins the exact versions used for every number in `results/` and `figures/`
+(numpy, pandas, scikit-learn, lightgbm, matplotlib, mapie, pytest, ipykernel, nbconvert).
+`torch` (LSTM phase), `scipy`/`seaborn` (analysis phase) and `mlflow` (optional) are added when those phases start.
 
 **MAPIE note.** This project uses the v1 API (`SplitConformalRegressor`, `ConformalizedQuantileRegressor`, `.conformalize()`, `.predict_interval()`, `confidence_level=`). Tutorials using `MapieRegressor` or `alpha=` are pre-v1 and will not run.
 
@@ -241,13 +235,25 @@ Each run appends one row to `results/runs.csv`. `notebooks/05_analysis.ipynb` re
 | Conformal layer, full grid, statistics | 5 | `03_conformal.ipynb`, 240 runs logged, `05_analysis.ipynb`, alert simulation | ☐ |
 | Writing and defence | 6 | thesis, figures, code frozen at a tagged release | ☐ |
 
+### Week-1 status (2026-09-15)
+
+Steps 1-7 of the first-week plan are implemented and executed on FD001 (all notebooks run end to end,
+`pytest` passes, `results/runs.csv` holds 5 seeds × {linear, lgbm, lgbm_scp, lgbm_cqr}).
+Decisions taken in code that the thesis text must state:
+
+- **Official-test truth is capped at `RUL_CAP`** like the training label (`features.official_rul`); scoring against the raw NASA values is one argument away.
+- **Interval bounds are clipped to [0, 125]** (`conformal.RUL_RANGE`). The truth always lies there, so clipping never lowers coverage; it only removes impossible width.
+- **Conformalisation uses all rows of the calibration engines**, evaluation on the official file uses one row per engine (its last cycle). The two row populations differ (notebook 02), which is part of why single-seed coverage can miss 0.90.
+- **LightGBM quantile models use `boost_from_average=False`** (`models.make_lgbm_quantile`). With the default start (the α-quantile of the label = the cap for α ≥ 0.6) the pinball gradient is identical for every row and the α = 0.75 model collapsed to a constant 125.
+- **Five-seed FD001 result (official test, 90 % intervals):** LightGBM RMSE 19.5 ± 0.8; SCP coverage 0.89 ± 0.04 with mean width 51 ± 6; CQR coverage 0.86 ± 0.05 with mean width 49 ± 4 (CQR's median model RMSE 19.9 ± 0.7). Untuned, seeds 0-4 only.
+
 **First-month checklist**
-- [ ] Data downloaded from the official link; counts verified; `data/raw` in `.gitignore`.
+- [x] Data downloaded from the official link; counts verified; `data/raw` in `.gitignore`.
 - [ ] Saxena 2008, Angelopoulos & Bates 2021, Javanmardi & Hüllermeier 2023 read with notes.
-- [ ] `requirements.txt` pinned; `runs.csv` logging in place.
-- [ ] EDA done for FD001 and FD002 with figures saved.
-- [ ] LightGBM on FD001 producing a plausible RMSE on the official test set.
-- [ ] SCP and CQR working on FD001 across 5 seeds; coverage ≈ 0.90.
+- [x] `requirements.txt` pinned; `runs.csv` logging in place.
+- [x] EDA done for FD001 and FD002 with figures saved.
+- [x] LightGBM on FD001 producing a plausible RMSE on the official test set.
+- [x] SCP and CQR working on FD001 across 5 seeds; coverage ≈ 0.90.
 - [ ] One page of notes on the exchangeability assumption (becomes a methods section).
 
 ---

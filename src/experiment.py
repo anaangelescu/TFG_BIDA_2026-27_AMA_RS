@@ -18,7 +18,7 @@ from src.conformal import RUL_RANGE, fit_cqr, fit_scp, predict_interval
 from src.evaluate import interval_metrics, point_metrics
 from src.features import FeaturePipeline, build_features, last_cycle, official_rul
 from src.load import load_subset
-from src.models import make_lgbm, make_linear
+from src.models import fit_quantile_trio, make_lgbm, make_linear
 from src.results import append_run
 from src.split import rows_of, split_engines
 
@@ -77,13 +77,18 @@ def evaluate_point(models: dict, data: SplitData, eval_sets=EVAL_SETS) -> pd.Dat
     return pd.DataFrame(rows)
 
 
-def fit_conformal(data: SplitData, lgbm, seed: int = SEED, confidence_level: float = CONFIDENCE_LEVEL) -> dict:
-    """SCP wraps the fitted LightGBM; CQR trains its own three quantile LightGBMs on the train engines."""
+def fit_conformal(data: SplitData, lgbm, seed: int = SEED, confidence_level: float = CONFIDENCE_LEVEL):
+    """SCP wraps the fitted LightGBM; CQR gets three quantile LightGBMs fitted on the train engines.
+
+    Returns (conformal_models, quantile_models) with quantile_models = (lower, upper, median).
+    """
     Xc, yc = data.X("cal"), data.y("cal")
-    return {
+    quantile_models = fit_quantile_trio(data.X("train"), data.y("train"), confidence_level, seed)
+    cps = {
         "lgbm_scp": fit_scp(lgbm, Xc, yc, confidence_level),
-        "lgbm_cqr": fit_cqr(data.X("train"), data.y("train"), Xc, yc, confidence_level, seed),
+        "lgbm_cqr": fit_cqr(Xc, yc, confidence_level, models=quantile_models),
     }
+    return cps, quantile_models
 
 
 def evaluate_conformal(cps: dict, data: SplitData, eval_sets=EVAL_SETS, clip=RUL_RANGE):
@@ -112,12 +117,12 @@ def run_seed(subset: str = "FD001", seed: int = SEED, confidence_level: float = 
     data = prepare(subset, seed)
     models = fit_point_models(data, seed)
     point_table = evaluate_point(models, data)
-    cps = fit_conformal(data, models["lgbm"], seed, confidence_level)
+    cps, quantile_models = fit_conformal(data, models["lgbm"], seed, confidence_level)
     interval_table, preds = evaluate_conformal(cps, data)
     if log:
         log_official(point_table, subset, seed)
         log_official(interval_table, subset, seed)
     return {
-        "data": data, "models": models, "conformal": cps,
+        "data": data, "models": models, "conformal": cps, "quantile_models": quantile_models,
         "point_table": point_table, "interval_table": interval_table, "predictions": preds,
     }

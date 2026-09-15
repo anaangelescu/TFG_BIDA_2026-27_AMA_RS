@@ -1,6 +1,9 @@
 """Untuned baseline models with a fixed seed. No hyper-parameter search in week one."""
 from __future__ import annotations
 
+import warnings
+
+import numpy as np
 from lightgbm import LGBMRegressor
 from sklearn.linear_model import LinearRegression
 
@@ -30,8 +33,22 @@ def make_lgbm(seed: int = SEED, **overrides) -> LGBMRegressor:
 
 
 def make_lgbm_quantile(alpha: float, seed: int = SEED) -> LGBMRegressor:
-    """LightGBM trained with the pinball loss for quantile `alpha` (used by CQR)."""
-    return make_lgbm(seed, objective="quantile", alpha=alpha)
+    """LightGBM trained with the pinball loss for quantile `alpha` (used by CQR).
+
+    boost_from_average=False: LightGBM would otherwise start every quantile model from the
+    alpha-quantile of the label, which for the capped RUL target is the cap itself (about 40 % of
+    the training rows sit at RUL_CAP). From that start every row has the same pinball gradient,
+    the trees find nothing to split on and the model can collapse to the constant RUL_CAP
+    (observed for alpha = 0.75 on FD001). Starting from zero avoids the degenerate start.
+    """
+    return make_lgbm(seed, objective="quantile", alpha=alpha, boost_from_average=False)
+
+
+def _check_not_degenerate(model: LGBMRegressor, X, alpha: float) -> LGBMRegressor:
+    """Warn if a quantile model predicts (almost) the same value everywhere."""
+    if np.std(model.predict(X)) < 1e-6:
+        warnings.warn(f"quantile model alpha={alpha} is constant on its training data", RuntimeWarning)
+    return model
 
 
 def quantile_alphas(confidence_level: float) -> tuple[float, float, float]:
@@ -41,4 +58,4 @@ def quantile_alphas(confidence_level: float) -> tuple[float, float, float]:
 
 def fit_quantile_trio(X, y, confidence_level: float, seed: int = SEED) -> tuple[LGBMRegressor, LGBMRegressor, LGBMRegressor]:
     """Fit the three quantile models CQR needs, in MAPIE's expected order: lower, upper, median."""
-    return tuple(make_lgbm_quantile(a, seed).fit(X, y) for a in quantile_alphas(confidence_level))
+    return tuple(_check_not_degenerate(make_lgbm_quantile(a, seed).fit(X, y), X, a) for a in quantile_alphas(confidence_level))

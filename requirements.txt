@@ -1,0 +1,18 @@
+# Exact versions used for every number in results/ and figures/ (Python 3.12, macOS arm64).
+# Install with:  python -m venv .venv && source .venv/bin/activate && pip install -r requirements.txt && pip install -e .
+
+# core
+numpy==2.5.3
+pandas==3.0.5
+scikit-learn==1.9.1
+scipy==1.18.1
+lightgbm==4.7.0
+matplotlib==3.11.2
+mapie==1.5.0
+
+# tests and notebook execution
+pytest==9.1.1
+ipykernel==7.3.0
+nbformat==5.11.1
+nbconvert==7.17.1
+nbclient==0.11.0
