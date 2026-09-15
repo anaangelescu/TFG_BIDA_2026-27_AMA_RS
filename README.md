@@ -3,7 +3,7 @@
 **How much can we trust a prediction of engine life?**
 Calibrated uncertainty for turbofan Remaining Useful Life (RUL) prediction on the NASA C-MAPSS dataset.
 
-Bachelor's thesis (TFG) — Ana Maria Angelescu & Rune Snauwaert, Business Intelligence and Data Analysis, La Salle Barcelona 2026–2027.
+Bachelor's thesis (TFG) — Ana-Maria Angelescu & Rune Snauwaert, Business Intelligence and Data Analysis, La Salle Barcelona 2026–2027.
 
 ---
 
