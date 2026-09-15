@@ -1,0 +1,13 @@
+numpy
+pandas
+scikit-learn
+lightgbm
+matplotlib
+mapie>=1.4
+
+[dev]
+pytest
+ipykernel
+nbformat
+nbconvert
+nbclient

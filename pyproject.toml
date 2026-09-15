@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "tfg-rul-uncertainty"
+version = "0.1.0"
+description = "Uncertainty-aware Remaining Useful Life prediction on NASA C-MAPSS (bachelor's thesis)."
+requires-python = ">=3.10"
+# Exact versions used for the reported numbers are pinned in requirements.txt.
+dependencies = [
+    "numpy",
+    "pandas",
+    "scikit-learn",
+    "lightgbm",
+    "matplotlib",
+    "mapie>=1.4",
+]
+
+[project.optional-dependencies]
+dev = ["pytest", "ipykernel", "nbformat", "nbconvert", "nbclient"]
+
+# The package is literally called `src` (python -m src.load, import src.features ...).
+[tool.setuptools]
+packages = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
