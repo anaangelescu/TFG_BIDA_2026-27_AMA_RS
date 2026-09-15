@@ -277,4 +277,4 @@ Tutorials: MAPIE documentation (*Use a pre-trained model*, CQR example); `kpeter
 
 ## 11. Acknowledgements and license
 
-Data: NASA Ames Prognostics Center of Excellence, Prognostics Data Repository. Code: [MIT / choose a license]. Thesis text: © [Your name], [University], [year].
+Data: NASA Ames Prognostics Center of Excellence, Prognostics Data Repository. Thesis text: Ana Maria Angelescu & Rune Snauwaert, Business Intelligence and Data Analysis, La Salle Barcelona 2026–2027.
