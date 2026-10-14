@@ -1,3 +1,30 @@
+# environments
 .venv/
-__pycache__/
+venv/
+env/
 .env
+
+# raw and processed data never enter git (README §3: the NASA files are redistributed by NASA, not by us)
+data/
+*.parquet
+
+# python
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.pytest_cache/
+
+# notebooks
+.ipynb_checkpoints/
+
+# models and experiment tracking
+*.pkl
+*.joblib
+mlruns/
+
+# os and editors
+.DS_Store
+.vscode/
+.idea/

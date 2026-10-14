@@ -187,8 +187,7 @@ Planned for later phases: `src/alert_sim.py` (alert-policy simulation) and `src/
 ## 7. Setup
 
 ```bash
-git clone <this repo>
-cd v1
+git clone <this repo> && cd <repo>          # this folder is the repository root
 python -m venv .venv && source .venv/bin/activate     # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
 pip install -e .                                      # makes `import src.…` work from notebooks and tests
@@ -213,15 +212,27 @@ jupyter nbconvert --to notebook --execute --inplace notebooks/01_eda.ipynb   # o
 
 ## 8. Running experiments
 
-```bash
-# one run
-python -m src.run --subset FD001 --model lgbm --uq scp --seed 0
+**Today (week 1).** One experiment is one `(subset, seed)` pair, run from Python:
 
-# full grid (4 subsets × 3 models × 2 UQ methods × 10 seeds = 240 runs)
-python -m src.run --all
+```python
+from src.experiment import run_seed
+res = run_seed("FD001", seed=0)          # linear + lgbm + SCP + CQR; appends 4 rows to results/runs.csv
+res["point_table"], res["interval_table"]
 ```
 
-Each run appends one row to `results/runs.csv`. `notebooks/05_analysis.ipynb` reads that file and produces every table and figure in the thesis; no result is ever typed by hand.
+The notebooks are the entry points: `02_baselines` and `03_conformal` run seed 0, `05_seed_variability`
+runs seeds 0–4. Re-running a notebook **replaces** the rows it owns (key = `subset, model, seed`)
+instead of appending duplicates, so `results/runs.csv` stays a clean snapshot of the latest code.
+
+**Planned.** A `src/run.py` CLI over the full grid, once the LSTM and the remaining subsets are in:
+
+```bash
+python -m src.run --subset FD001 --model lgbm --uq scp --seed 0
+python -m src.run --all     # 4 subsets × 3 models × 2 UQ methods × 10 seeds = 240 runs
+```
+
+`notebooks/07_analysis.ipynb` will read that file and produce every table and figure in the thesis;
+no result is ever typed by hand.
 
 ---
 
