@@ -1,0 +1,356 @@
+<title>Engine Removal Planner</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+/* Layout: a planner's worksheet. Inputs in a narrow left column, the decision and its evidence on the right; one column on phones. */
+:root {
+  --paper: #eef2f5; --panel: #ffffff; --ink: #14202b; --muted: #566572; --rule: #d3dbe2;
+  --accent: #a8520a; --accent-soft: #f6e6d5; --good: #2b7a4b; --good-soft: #dcefe3; --bad: #b42318; --bad-soft: #f8dedb;
+  --band: #f3d9a0;
+  --display: "Barlow Condensed", "Arial Narrow", "Roboto Condensed", sans-serif;
+  --body: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --paper: #0e151b; --panel: #16202880; --ink: #e4ebf0; --muted: #94a3af; --rule: #2a3843;
+  --accent: #f0a04b; --accent-soft: #3a2a17; --good: #63c28c; --good-soft: #173325; --bad: #f2786b; --bad-soft: #3b1c19;
+  --band: #4a3b18; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --paper: #0e151b; --panel: #16202880; --ink: #e4ebf0; --muted: #94a3af; --rule: #2a3843;
+  --accent: #f0a04b; --accent-soft: #3a2a17; --good: #63c28c; --good-soft: #173325; --bad: #f2786b; --bad-soft: #3b1c19;
+  --band: #4a3b18; color-scheme: dark }
+* { box-sizing: border-box }
+body { background: var(--paper); color: var(--ink); font-family: var(--body); font-size: 15px; line-height: 1.5;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 28px 48px }
+.wrap { max-width: 1180px; margin: 0 auto; display: grid; gap: 28px }
+header { display: grid; gap: 8px; max-width: 760px }
+.eyebrow { font-family: var(--mono); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted) }
+h1 { font-family: var(--display); font-weight: 700; font-size: clamp(34px, 5vw, 52px); line-height: 1; margin: 0; letter-spacing: .01em; text-wrap: balance }
+h2 { font-family: var(--display); font-weight: 600; font-size: 24px; margin: 0; letter-spacing: .02em; text-wrap: balance }
+p { margin: 0; max-width: 68ch }
+.lede { color: var(--muted); font-size: 16px }
+.grid { display: grid; grid-template-columns: minmax(250px, 300px) minmax(0, 1fr); gap: 28px; align-items: start }
+@media (max-width: 860px) { .grid { grid-template-columns: minmax(0, 1fr) } }
+aside { display: grid; gap: 22px; position: sticky; top: calc(env(safe-area-inset-top, 0px) + 12px) }
+@media (max-width: 860px) { aside { position: static } }
+.field { display: grid; gap: 8px }
+.label { font-family: var(--mono); font-size: 12px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted) }
+.seg { display: flex; flex-wrap: wrap; gap: 6px }
+.seg button { font: 500 14px var(--body); color: var(--ink); background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 6px 10px; cursor: pointer }
+.seg button[aria-pressed="true"] { background: var(--ink); color: var(--paper); border-color: var(--ink) }
+.seg button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px }
+.hint { font-size: 13px; color: var(--muted) }
+.money { display: flex; align-items: center; gap: 8px }
+.money input { width: 100%; font: 500 18px var(--mono); color: var(--ink); background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 6px 10px }
+.money span { font-family: var(--mono); color: var(--muted) }
+input[type=range] { width: 100%; accent-color: var(--accent) }
+.ratio { font-family: var(--display); font-weight: 600; font-size: 40px; line-height: 1 }
+.ratio small { font-family: var(--body); font-size: 14px; font-weight: 400; color: var(--muted) }
+.chip { display: inline-block; font: 500 12px var(--mono); padding: 2px 8px; border-radius: 99px; background: var(--accent-soft); color: var(--accent) }
+.chip.good { background: var(--good-soft); color: var(--good) }
+.chip.bad { background: var(--bad-soft); color: var(--bad) }
+main { display: grid; gap: 28px; min-width: 0 }
+.verdict { background: var(--panel); border: 1px solid var(--rule); border-left: 6px solid var(--accent); border-radius: 8px; padding: 18px 20px; display: grid; gap: 14px }
+.verdict .rule-name { font-family: var(--display); font-weight: 700; font-size: 30px; line-height: 1.05 }
+.kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 14px }
+.kpi { display: grid; gap: 2px }
+.kpi b { font: 500 22px var(--mono); font-variant-numeric: tabular-nums }
+.kpi span { font-size: 13px; color: var(--muted) }
+.section { display: grid; gap: 12px; min-width: 0 }
+.tablewrap { overflow-x: auto; background: var(--panel); border: 1px solid var(--rule); border-radius: 8px }
+table { border-collapse: collapse; width: 100%; font-size: 14px; min-width: 620px }
+th, td { text-align: right; padding: 9px 12px; border-bottom: 1px solid var(--rule); font-variant-numeric: tabular-nums; white-space: nowrap }
+th { font: 500 12px var(--mono); text-transform: uppercase; letter-spacing: .05em; color: var(--muted); background: transparent }
+td:first-child, th:first-child { text-align: left; white-space: normal }
+td.num { font-family: var(--mono) }
+tr:last-child td { border-bottom: 0 }
+tr.best td { background: var(--good-soft) }
+tr.ref td { color: var(--muted); font-style: italic }
+.override { background: var(--panel); border: 1px solid var(--rule); border-radius: 8px; padding: 18px 20px; display: grid; gap: 16px }
+.row { display: flex; flex-wrap: wrap; gap: 18px; align-items: end }
+.row > .field { flex: 1 1 220px; min-width: 0 }
+svg { width: 100%; height: auto; display: block }
+svg text { fill: var(--muted); font: 11px var(--mono) }
+.notes { display: grid; gap: 8px; color: var(--muted); font-size: 13.5px; border-top: 1px solid var(--rule); padding-top: 16px }
+.notes p { max-width: 90ch }
+@media (prefers-reduced-motion: no-preference) { .verdict, .kpi b { transition: background-color .2s } }
+</style>
+
+<div class="wrap">
+  <header>
+    <div class="eyebrow">TFG BIDA · La Salle Barcelona · Angelescu &amp; Snauwaert</div>
+    <h1>Engine Removal Planner</h1>
+    <p class="lede">Say what an unplanned engine failure costs compared with a planned removal. The planner shows which alert rule is cheapest, how many engines it lets fail, how much engine life it throws away, and what it costs to move its threshold by hand.</p>
+  </header>
+
+  <div class="grid">
+    <aside aria-label="Inputs">
+      <div class="field">
+        <span class="label">Fleet (NASA C-MAPSS subset)</span>
+        <div class="seg" id="fleet"></div>
+        <span class="hint" id="fleetHint"></span>
+      </div>
+      <div class="field">
+        <span class="label">Notice needed to plan a removal</span>
+        <div class="seg" id="notice"></div>
+        <span class="hint">Flight cycles between the alert and the shop slot.</span>
+      </div>
+      <div class="field">
+        <label class="label" for="planned">Planned removal (shop visit)</label>
+        <div class="money"><span>€</span><input id="planned" type="number" min="0.1" step="0.1" value="1.0" inputmode="decimal"><span>M</span></div>
+      </div>
+      <div class="field">
+        <label class="label" for="failure">Unplanned failure</label>
+        <div class="money"><span>€</span><input id="failureEur" type="number" min="0.1" step="0.1" value="3.0" inputmode="decimal" aria-label="Unplanned failure cost in million euros"><span>M</span></div>
+        <input id="failure" type="range" min="0" max="1000" step="1" aria-label="Failure cost slider">
+        <div class="ratio"><span id="ratioTxt">3.0×</span> <small>failure : planned</small></div>
+        <span id="bandChip" class="chip"></span>
+      </div>
+    </aside>
+
+    <main>
+      <section class="verdict" aria-live="polite">
+        <div class="eyebrow" id="verdictEyebrow">Recommended rule</div>
+        <div class="rule-name" id="bestName">…</div>
+        <p id="bestLine" class="hint"></p>
+        <div class="kpis">
+          <div class="kpi"><b id="kSave">…</b><span>cheaper than age-based replacement</span></div>
+          <div class="kpi"><b id="kFail">…</b><span>failures per 100 engines</span></div>
+          <div class="kpi"><b id="kWaste">…</b><span>cycles of life wasted per engine</span></div>
+          <div class="kpi"><b id="kEur">…</b><span>average cost per removal</span></div>
+        </div>
+        <p id="breakEven"></p>
+      </section>
+
+      <section class="section">
+        <h2>Tested on engines the rules never saw</h2>
+        <p class="hint" id="oosHint"></p>
+        <div class="tablewrap"><table id="oos"><thead><tr>
+          <th>Rule</th><th>Failures /100</th><th>Wasted cycles per engine</th><th>Cost index</th><th>vs age-based</th>
+        </tr></thead><tbody></tbody></table></div>
+      </section>
+
+      <section class="section">
+        <h2>What each dial can do at best</h2>
+        <p class="hint">Each rule has one dial. Here the setting is picked with hindsight on the same engines, for any cost ratio, so read it as the ceiling of each rule rather than a forecast. Cost index: perfect information = 100.</p>
+        <div class="tablewrap"><table id="rules"><thead><tr>
+          <th>Rule</th><th>Dial</th><th>Best setting</th><th>Failures /100</th><th>Life used</th><th>Cost index</th><th>vs age-based</th>
+        </tr></thead><tbody></tbody></table></div>
+      </section>
+
+      <section class="override">
+        <div class="row">
+          <div class="field">
+            <span class="label">Adjust a rule by hand</span>
+            <div class="seg" id="dialPick"></div>
+          </div>
+          <div class="field">
+            <span class="label">Freedom given to the planner</span>
+            <div class="seg" id="freedom"></div>
+          </div>
+        </div>
+        <div class="field">
+          <label class="label" for="dial" id="dialLabel">Setting</label>
+          <input id="dial" type="range" min="0" max="10" step="1">
+        </div>
+        <div class="kpis">
+          <div class="kpi"><b id="oSet">…</b><span>your setting</span></div>
+          <div class="kpi"><b id="oFail">…</b><span>failures per 100 engines</span></div>
+          <div class="kpi"><b id="oLife">…</b><span>of engine life used</span></div>
+          <div class="kpi"><b id="oExtra">…</b><span>extra cost vs the best setting</span></div>
+        </div>
+        <svg id="chart" viewBox="0 0 720 260" role="img" aria-label="Cost index against the dial setting"></svg>
+      </section>
+
+      <section class="notes">
+        <p><b>Data.</b> NASA C-MAPSS simulated turbofan engines run to failure (FD001–FD004). LightGBM predicts remaining life; every engine is predicted by a model that never saw it (5-fold engine cross-fitting), repeated for <span id="seedsTxt">10</span> random seeds. The engines are simulated, so the euros illustrate the method and are not a forecast for any airline.</p>
+        <p><b>Maintenance model.</b> The first alert books a removal after the notice period. If the engine is still alive it is a planned removal and its remaining life is wasted; otherwise it fails. Cost per cycle flown = (failures × failure cost + planned removals × planned cost) ÷ cycles flown, so throwing life away is never free.</p>
+        <p><b>Two views.</b> The recommendation and the first table use dials tuned on separate calibration engines and applied once to unseen engines, as in the thesis; they are computed at the tested cost ratios (1, 1.5, 2, 3, 5, 10, 20, 50, 100) and the nearest one is shown. The dial explorer picks settings with hindsight for any ratio, an upper bound on what tuning can do.</p>
+        <p><b>Dials.</b> Safety margin: alert when the predicted life is within notice + margin. Confidence level: alert when the lower end of the prediction interval reaches the notice period (higher level = earlier alert). Age: replace every engine at a fixed age, no sensors.</p>
+        <p><b>Freedom.</b> In the thesis results a riskier confidence level costs far more than a more cautious one (one step riskier: +1 to +29 %; one step more cautious: +0.2 to +4 %). "Caution only" lets the planner move the alert earlier but never later than the recommendation.</p>
+      </section>
+    </main>
+  </div>
+</div>
+
+<script>
+const DATA = /*__DATA__*/null;
+const DIALS = {
+  "point margin":   {name: "Point prediction + safety margin", dial: "margin", fmt: v => `${v} cycles`},
+  "SCP level":      {name: "Split conformal interval", dial: "confidence", fmt: v => `${Math.round(v * 100)}%`},
+  "Mondrian level": {name: "Mondrian interval (calibrated per life stage)", dial: "confidence", fmt: v => `${Math.round(v * 100)}%`},
+  "CQR level":      {name: "Adaptive quantile interval (CQR)", dial: "confidence", fmt: v => `${Math.round(v * 100)}%`},
+  "age":            {name: "Age-based replacement", dial: "age", fmt: v => `${v} cycles`},
+};
+const ORDER = ["age", "point margin", "SCP level", "Mondrian level", "CQR level"];
+const OOS = {"age (tuned)": "Age-based replacement (tuned)", "point": "Point prediction, no margin",
+  "point + tuned margin": "Point + tuned safety margin", "SCP 90%": "Split conformal 90%", "Mondrian 90%": "Mondrian 90%",
+  "CQR 90%": "CQR 90%", "Mondrian tuned level": "Mondrian, tuned level", "CQR tuned level": "CQR, tuned level", "oracle": "Perfect information"};
+const FLEET_HINT = {ALL: "All four subsets pooled.", FD001: "1 operating condition, 1 fault mode.", FD002: "6 operating conditions, 1 fault mode.",
+  FD003: "1 operating condition, 2 fault modes.", FD004: "6 operating conditions, 2 fault modes."};
+const state = {fleet: "ALL", h: 10, planned: 1.0, failure: 3.0, pick: "CQR level", freedom: 5, dialIdx: null};
+const LOG_MAX = Math.log(100);
+
+function pref(k, v) { try { if (v === undefined) return localStorage.getItem(k); localStorage.setItem(k, v); } catch (e) { return null; } }
+
+function seg(id, items, get, set) {
+  const el = document.getElementById(id); el.innerHTML = "";
+  items.forEach(([val, label]) => {
+    const b = document.createElement("button"); b.type = "button"; b.textContent = label;
+    b.setAttribute("aria-pressed", String(get() === val));
+    b.addEventListener("click", () => { set(val); render(); });
+    el.appendChild(b);
+  });
+}
+
+function block() { return DATA.curves[`${state.fleet}|${state.h}`]; }
+function ratio() { return state.failure / state.planned; }
+
+function evalCurve(c, r) {
+  // per setting: cost rate (planned removals per 1,000 cycles), oracle rate, failures/100, life used
+  return c.v.map((v, i) => {
+    const life = c.c[i] + c.w[i];
+    return {v, i, rate: 1000 * (r * c.f[i] + c.p[i]) / c.c[i], oracle: 1000 * c.n[i] / life,
+            fail100: 100 * c.f[i] / c.n[i], used: c.c[i] / life, f: c.f[i], p: c.p[i]};
+  });
+}
+function best(rows) { return rows.reduce((a, b) => (b.rate < a.rate - 1e-12 ? b : a)); }
+
+const INTERVAL_RULES = ["SCP 90%", "Mondrian 90%", "CQR 90%", "Mondrian tuned level", "CQR tuned level"];
+
+function oosAt(dec, rule, rr) { const j = dec[rule].ratio.indexOf(rr);
+  return {index: dec[rule].index[j], save: dec[rule].save[j], f: dec[rule].fail100[j], w: dec[rule].waste[j]}; }
+
+function breakEvenPick(list) {
+  // prefer rules that break even in at least 3 runs out of 4; among them the lowest median
+  const solid = list.filter(x => x.median !== null && x.hits >= 0.75 * x.runs);
+  if (solid.length) return solid.reduce((a, x) => (x.median < a.median ? x : a));
+  const some = list.filter(x => x.hits > 0);
+  return some.length ? some.reduce((a, x) => (x.hits > a.hits ? x : a)) : null;
+}
+
+const pct = x => `${(100 * x).toFixed(1)}%`;
+const eurM = x => `€${x >= 10 ? x.toFixed(0) : x.toFixed(2)} M`;
+
+function render() {
+  pref("planner.fleet", state.fleet); pref("planner.h", String(state.h));
+  const r = ratio();
+  seg("fleet", ["ALL", ...DATA.meta.subsets].map(s => [s, s === "ALL" ? "All" : s]), () => state.fleet, v => { state.fleet = v; state.dialIdx = null; });
+  seg("notice", DATA.meta.horizons.map(h => [h, `${h} cycles`]), () => state.h, v => { state.h = v; state.dialIdx = null; });
+  seg("dialPick", ["point margin", "Mondrian level", "CQR level"].map(d => [d, d === "point margin" ? "Safety margin" : d.replace(" level", "")]), () => state.pick, v => { state.pick = v; state.dialIdx = null; });
+  seg("freedom", [[2, "±2 steps"], [5, "±5 steps"], [-5, "Caution only, +5"], [999, "Unlimited"]], () => state.freedom, v => { state.freedom = v; state.dialIdx = null; });
+  document.getElementById("fleetHint").textContent = FLEET_HINT[state.fleet] || "";
+  document.getElementById("ratioTxt").textContent = `${r < 10 ? r.toFixed(1) : r.toFixed(0)}×`;
+  const [lo, hi] = DATA.meta.band, chip = document.getElementById("bandChip");
+  chip.textContent = r < lo ? "below the plausible range" : r > hi ? `stress test: above ${hi}×` : `plausible range ${lo}–${hi}×`;
+  chip.className = "chip" + (r >= lo && r <= hi ? " good" : "");
+  document.getElementById("failure").value = Math.round(1000 * Math.log(Math.max(1, Math.min(100, r))) / LOG_MAX);
+
+  const b = block();
+  const rows = ORDER.map(d => ({d, ...best(evalCurve(b[d], r))}));
+  const age = rows.find(x => x.d === "age");
+  const top = rows.reduce((a, x) => (x.rate < a.rate ? x : a));
+  const oracleRate = top.oracle;
+
+  // recommendation: out-of-sample results at the tested ratio nearest to r (log scale)
+  const ratios = DATA.meta.ratios;
+  const rr = ratios.reduce((a, x) => (Math.abs(Math.log(x / r)) < Math.abs(Math.log(a / r)) ? x : a));
+  const dec = DATA.decisions[`${state.fleet}|${state.h}`];
+  const list = Object.keys(OOS).filter(k => dec[k]).map(k => ({k, ...oosAt(dec, k, rr)}));
+  const cands = list.filter(x => x.k !== "oracle");
+  const rec = cands.reduce((a, x) => (x.index < a.index ? x : a));
+  document.getElementById("verdictEyebrow").textContent = `Recommended rule · tested at ${rr}×, the tested ratio nearest to yours`;
+  document.getElementById("bestName").textContent = OOS[rec.k];
+  document.getElementById("bestLine").textContent = `Fleet ${state.fleet === "ALL" ? "FD001–FD004" : state.fleet}, ${state.h} cycles of notice. Dial tuned on calibration engines, applied once to unseen engines; median of ${state.fleet === "ALL" ? 4 * DATA.meta.seeds : DATA.meta.seeds} runs.`;
+  document.getElementById("kSave").textContent = pct(rec.save);
+  document.getElementById("kFail").textContent = rec.f.toFixed(1);
+  document.getElementById("kWaste").textContent = rec.w.toFixed(1);
+  const fs = rec.f / 100;
+  document.getElementById("kEur").textContent = eurM(state.planned * (r * fs + (1 - fs)));
+  const be = breakEvenPick(DATA.break_even[`${state.fleet}|${state.h}`] || []);
+  const name = be ? (OOS[be.rule] || be.rule) : "";
+  const solid = be && be.median !== null && be.hits >= 0.75 * be.runs;
+  document.getElementById("breakEven").innerHTML = !be ? "On unseen engines no interval rule beat the tuned safety margin in any run, up to 100× the planned cost."
+    : solid ? `On unseen engines, ${name} beats the tuned safety margin once a failure costs more than <b>${eurM(be.median * state.planned)}</b> (median of ${be.runs} runs, half of them between ${eurM(be.q25 * state.planned)} and ${be.q75 === null ? "never" : eurM(be.q75 * state.planned)}; it breaks even in ${be.hits} of ${be.runs}).`
+    : `No interval rule reliably beats the tuned safety margin here. The best candidate, ${name}, breaks even in only ${be.hits} of ${be.runs} runs, and in those runs once a failure costs more than about ${eurM(be.median_hit * state.planned)}.`;
+
+  document.getElementById("oosHint").textContent = `Median over ${state.fleet === "ALL" ? 4 * DATA.meta.seeds : DATA.meta.seeds} runs at ${rr}×. Cost index: perfect information = 100. Highlighted: cheapest.`;
+  const ot = document.querySelector("#oos tbody"); ot.innerHTML = "";
+  list.forEach(x => {
+    const tr = document.createElement("tr");
+    if (x.k === "oracle") tr.className = "ref"; else if (x === rec) tr.className = "best";
+    const vs = x.k === "age (tuned)" ? "–" : (x.save >= 0 ? "−" : "+") + pct(Math.abs(x.save));
+    tr.innerHTML = `<td>${OOS[x.k]}</td><td class="num">${x.f.toFixed(1)}</td><td class="num">${x.w.toFixed(1)}</td><td class="num">${x.index.toFixed(0)}</td><td class="num">${vs}</td>`;
+    ot.appendChild(tr);
+  });
+
+  // hand adjustment
+  const cur = evalCurve(b[state.pick], r), opt = best(cur);
+  const span = state.freedom >= 999 ? cur.length : Math.abs(state.freedom);
+  const loI = state.freedom < 0 ? opt.i : Math.max(0, opt.i - span), hiI = Math.min(cur.length - 1, opt.i + span);
+  if (state.dialIdx === null || state.dialIdx < loI || state.dialIdx > hiI) state.dialIdx = opt.i;
+  const slider = document.getElementById("dial");
+  slider.min = loI; slider.max = hiI; slider.value = state.dialIdx;
+  document.getElementById("dialLabel").textContent = `${DIALS[state.pick].name}: ${DIALS[state.pick].dial} (best ${DIALS[state.pick].fmt(opt.v)})`;
+  const me = cur[state.dialIdx];
+  document.getElementById("oSet").textContent = DIALS[state.pick].fmt(me.v);
+  document.getElementById("oFail").textContent = me.fail100.toFixed(1);
+  document.getElementById("oLife").textContent = pct(me.used);
+  const extra = me.rate / opt.rate - 1;
+  const ox = document.getElementById("oExtra"); ox.textContent = `+${pct(extra)}`;
+  ox.style.color = extra > 0.05 ? "var(--bad)" : extra > 0.005 ? "var(--accent)" : "var(--good)";
+  drawChart(cur, opt, me, loI, hiI, oracleRate);
+
+  document.getElementById("seedsTxt").textContent = DATA.meta.seeds;
+}
+
+function drawChart(cur, opt, me, loI, hiI, oracleRate) {
+  const W = 720, H = 260, L = 52, R = 14, T = 14, B = 40;
+  const svg = document.getElementById("chart");
+  const xs = cur.map(p => p.v), x0 = Math.min(...xs), x1 = Math.max(...xs);
+  const idx = cur.map(p => 100 * p.rate / oracleRate);
+  const yMin = Math.min(...idx), yCap = Math.max(yMin * 1.6, yMin + 20);
+  const raw = (yCap - yMin) / 4, mag = Math.pow(10, Math.floor(Math.log10(raw)));
+  const stepN = [1, 2, 2.5, 5, 10].map(m => m * mag).find(m => m >= raw);
+  const y0 = Math.floor(yMin / stepN) * stepN, y1 = y0 + 4 * stepN;
+  const X = v => L + (W - L - R) * (v - x0) / ((x1 - x0) || 1);
+  const Y = v => T + (H - T - B) * (1 - (Math.min(v, y1) - y0) / (y1 - y0));
+  let s = "";
+  for (let k = 0; k <= 4; k++) { const v = y0 + k * stepN; s += `<line x1="${L}" x2="${W - R}" y1="${Y(v)}" y2="${Y(v)}" stroke="var(--rule)" stroke-width="1"/><text x="${L - 6}" y="${Y(v) + 4}" text-anchor="end">${v.toFixed(0)}</text>`; }
+  s += `<rect x="${X(cur[loI].v)}" y="${T}" width="${Math.max(2, X(cur[hiI].v) - X(cur[loI].v))}" height="${H - T - B}" fill="var(--band)" opacity="0.55"/>`;
+  const ticks = 6;
+  for (let k = 0; k <= ticks; k++) { const v = x0 + (x1 - x0) * k / ticks; const lab = DIALS[state.pick].dial === "confidence" ? `${Math.round(v * 100)}%` : v.toFixed(0); s += `<text x="${X(v)}" y="${H - B + 16}" text-anchor="middle">${lab}</text>`; }
+  s += `<text x="${(L + W - R) / 2}" y="${H - 6}" text-anchor="middle">${DIALS[state.pick].dial === "confidence" ? "confidence level (higher = earlier alert)" : "safety margin in cycles (higher = earlier alert)"}</text>`;
+  s += `<text x="12" y="${T + (H - T - B) / 2}" transform="rotate(-90 12 ${T + (H - T - B) / 2})" text-anchor="middle">cost index</text>`;
+  const pts = cur.map((p, i) => `${X(p.v).toFixed(1)},${Y(idx[i]).toFixed(1)}`).join(" ");
+  s += `<polyline points="${pts}" fill="none" stroke="var(--ink)" stroke-width="1.8"/>`;
+  s += `<circle cx="${X(opt.v)}" cy="${Y(100 * opt.rate / oracleRate)}" r="5" fill="var(--good)"/>`;
+  s += `<circle cx="${X(me.v)}" cy="${Y(100 * me.rate / oracleRate)}" r="6" fill="none" stroke="var(--accent)" stroke-width="2.5"/>`;
+  svg.innerHTML = s;
+}
+
+function syncFailureFromSlider() {
+  const r = Math.exp(LOG_MAX * Number(document.getElementById("failure").value) / 1000);
+  state.failure = +(r * state.planned).toFixed(2);
+  document.getElementById("failureEur").value = state.failure;
+  render();
+}
+
+function init() {
+  if (!DATA) { document.querySelector("main").innerHTML = "<p>No results embedded. Run <code>python app/build_planner.py</code>.</p>"; return; }
+  const f = pref("planner.fleet"), h = pref("planner.h");
+  if (f && (f === "ALL" || DATA.meta.subsets.includes(f))) state.fleet = f;
+  if (h && DATA.meta.horizons.includes(Number(h))) state.h = Number(h);
+  state.planned = DATA.meta.planned_eur / 1e6;
+  document.getElementById("planned").value = state.planned;
+  document.getElementById("failureEur").value = state.failure;
+  document.getElementById("failure").addEventListener("input", syncFailureFromSlider);
+  document.getElementById("failureEur").addEventListener("input", e => { const v = parseFloat(e.target.value); if (v > 0) { state.failure = v; render(); } });
+  document.getElementById("planned").addEventListener("input", e => { const v = parseFloat(e.target.value); if (v > 0) { state.planned = v; render(); } });
+  document.getElementById("dial").addEventListener("input", e => { state.dialIdx = Number(e.target.value); render(); });
+  render();
+}
+init();
+</script>

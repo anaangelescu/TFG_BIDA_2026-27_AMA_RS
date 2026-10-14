@@ -132,3 +132,36 @@ def test_incomplete_engine_is_rejected():
     f = engines({1: 10}).iloc[2:]                              # cycles 3..10: not a complete engine
     with pytest.raises(AssertionError):
         simulate(f, np.zeros(len(f), bool), horizon=2)
+
+
+def test_threshold_outcomes_match_simulate():
+    from src.decision import threshold_outcomes
+    rng = np.random.default_rng(3)
+    f = engines({1: 120, 2: 160, 3: 90, 4: 200}, bias={1: 8.0, 2: -15.0, 3: 0.0, 4: 3.0})
+    f["pred"] = f["pred"] + rng.normal(0, 4, len(f))            # noisy, non-monotone predictions
+    curve = threshold_outcomes(f, f["pred"], thresholds=[0, 5, 10, 20, 40], horizon=10)
+    for _, row in curve.iterrows():
+        out = simulate(f, f["pred"].to_numpy() <= row["threshold"], horizon=10)
+        assert row["failures"] == (out["outcome"] == FAILURE).sum()
+        assert row["wasted_cycles"] == pytest.approx(out["wasted_cycles"].sum())
+        assert row["cycles_flown"] == pytest.approx(out["cycles_flown"].sum())
+
+
+def test_best_threshold_trades_failures_against_waste():
+    from src.decision import best_threshold, threshold_outcomes
+    f = engines({1: 100, 2: 100}, bias={1: 6.0, 2: 6.0})
+    curve = threshold_outcomes(f, f["pred"], thresholds=np.arange(10, 31), horizon=10)
+    assert best_threshold(curve, Costs(1, 50)) == 16           # margin 6 on top of the horizon 10
+    assert best_threshold(curve, Costs(1, 1)) == 10            # failures as cheap as removals -> no margin
+
+
+def test_break_even_is_where_the_challenger_stays_cheaper():
+    # challenger cheaper at ratio 1 (an artefact), dearer at 2 and 5, cheaper from 10 on -> break-even between 5 and 10
+    rows = [("base", 1, 5.0), ("ch", 1, 4.0), ("base", 2, 5.0), ("ch", 2, 6.0), ("base", 5, 6.0), ("ch", 5, 7.0),
+            ("base", 10, 8.0), ("ch", 10, 7.0), ("base", 20, 12.0), ("ch", 20, 7.5)]
+    t = pd.DataFrame(rows, columns=["rule", "ratio", "cost_per_1000_cycles"])
+    be = break_even(t, "base", "ch")
+    assert 5 < be < 10
+    assert be == pytest.approx(np.exp(np.log(5) + (np.log(10) - np.log(5)) * 0.5))
+    t2 = t.copy(); t2.loc[(t2.rule == "ch") & (t2.ratio == 20), "cost_per_1000_cycles"] = 13.0
+    assert np.isnan(break_even(t2, "base", "ch"))             # dearer again at the top: no break-even

@@ -130,3 +130,68 @@ def plot_width_vs_rul(y_true, widths: dict[str, np.ndarray], title: str, n_bins:
     ax.grid(alpha=0.3)
     ax.legend(fontsize=8)
     return fig
+
+
+# --------------------------------------------------------------------------- conditional coverage and decisions (notebooks 06-07)
+METHOD_COLORS = {"SCP": "#7f7f7f", "Mondrian": "#1f77b4", "CQR": "#d62728"}
+
+
+def plot_coverage_by_stratum(tables: dict[str, pd.DataFrame], nominal: float, title: str) -> plt.Figure:
+    """Grouped bars: coverage per stratum (columns) for each method (rows), one panel per table.
+
+    `tables` maps a panel title (e.g. "by predicted RUL") to a method x stratum table from
+    src.summarize.coverage_table. The dashed line is the nominal level.
+    """
+    fig, axes = plt.subplots(1, len(tables), figsize=(6.5 * len(tables), 4), squeeze=False)
+    for ax, (panel, t) in zip(axes[0], tables.items()):
+        x = np.arange(t.shape[1])
+        width = 0.8 / len(t.index)
+        for i, method in enumerate(t.index):
+            ax.bar(x + (i - (len(t.index) - 1) / 2) * width, t.loc[method].to_numpy(), width,
+                   label=method, color=METHOD_COLORS.get(method))
+        ax.axhline(nominal, color="k", ls="--", lw=1, label=f"nominal {nominal:.0%}")
+        ax.set_xticks(x, t.columns, rotation=0)
+        ax.set(ylim=(0.4, 1.02), ylabel="coverage", xlabel="RUL stratum (cycles)", title=panel)
+        ax.grid(axis="y", alpha=0.3)
+    axes[0][0].legend(fontsize=8, loc="lower left")
+    fig.suptitle(title)
+    fig.tight_layout()
+    return fig
+
+
+def plot_cost_curves(table: pd.DataFrame, title: str, band: tuple[float, float] | None = None,
+                     rules: list[str] | None = None, ylabel: str = "cost per 1,000 cycles (planned removals)") -> plt.Figure:
+    """Cost rate against the failure : planned cost ratio (log axis), one line per rule.
+
+    `table` is rules x ratios (src.summarize.cost_table). `band` shades the plausible ratio range.
+    """
+    rules = rules or list(table.index)
+    fig, ax = plt.subplots(figsize=(8, 4.5))
+    if band:
+        ax.axvspan(*band, color="gold", alpha=0.15, label="plausible ratio band")
+    for rule in rules:
+        if rule in table.index:
+            style = "k--" if rule == "oracle" else ("-" if "tuned" in rule or rule.startswith("age") else "o-")
+            ax.plot(table.columns.astype(float), table.loc[rule].to_numpy(), style, label=rule, lw=1.6, ms=4)
+    ax.set_xscale("log")
+    ax.set(xlabel="failure : planned removal cost ratio", ylabel=ylabel, title=title)
+    ax.grid(alpha=0.3, which="both")
+    ax.legend(fontsize=8, ncol=2)
+    fig.tight_layout()
+    return fig
+
+
+def plot_dial_tradeoff(points: dict[str, pd.DataFrame], title: str) -> plt.Figure:
+    """Failures per 100 engines against mean wasted cycles per engine, one curve per dial.
+
+    Each frame has columns failures, wasted_cycles, engines (summed over folds), one row per dial
+    setting. The curve closer to the origin offers better trade-offs at every cost ratio.
+    """
+    fig, ax = plt.subplots(figsize=(7, 4.5))
+    for name, c in points.items():
+        ax.plot(c["wasted_cycles"] / c["engines"], 100 * c["failures"] / c["engines"], "o-", ms=3, label=name)
+    ax.set(xlabel="mean wasted cycles per engine (life thrown away)", ylabel="failures per 100 engines", title=title)
+    ax.grid(alpha=0.3)
+    ax.legend(fontsize=8)
+    fig.tight_layout()
+    return fig

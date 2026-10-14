@@ -1,19 +1,19 @@
 # Research direction: where coverage fails, and what it costs
 
-*Status: proposal, 14 October 2026. It combines (a) the conditional-coverage finding from our Claude Code sessions and (b) the tutor's feedback of 14 October. To agree with Jonas Viklund before chapters are rewritten.*
+*Status: 14 October 2026. Combines (a) the conditional-coverage finding from our Claude Code sessions and (b) the tutor's feedback of 14 October, now built and run on FD001–FD004 × 10 seeds (README §8). To agree with Jonas Viklund before chapters are rewritten.*
 
 ## 1. The problem in one paragraph
 
-A maintenance planner must decide when to take an engine out of service without knowing exactly how long it will last. A prediction of remaining useful life (RUL) supports that decision; it does not make it. A 90% prediction interval looks like the right tool, but its guarantee holds only *on average over all engines and all moments of their life*. In our FD001 runs the intervals cover 85–89% overall, but the misses concentrate in specific remaining-life ranges. Split conformal covers every engine near failure (wasted engine life) and only about half in mid-life. CQR, which narrows its intervals near failure, covers only about three quarters there (seed 0, preliminary; README §8). The business question is therefore not "how accurate is the model?" but "where is the interval wrong, what does that cost, and when is acting on an interval worth more than acting on a well-tuned point prediction?"
+A maintenance planner must decide when to take an engine out of service without knowing exactly how long it will last. A prediction of remaining useful life (RUL) supports that decision; it does not make it. A 90% prediction interval looks like the right tool, but its guarantee holds only *on average over all engines and all moments of their life*. Across all 709 run-to-failure engines and 10 seeds, the misses concentrate in specific remaining-life ranges. Split conformal covers 0.99 of cycles near failure (wasted engine life) and 0.70 in mid-life; CQR covers 0.92 near failure and about 0.81 in mid-life; and every method misses on the late side 11–16 % of the time when the true remaining life is 25–50 cycles (README §8.1). The business question is therefore not "how accurate is the model?" but "where is the interval wrong, what does that cost, and when is acting on an interval worth more than acting on a well-tuned point prediction?"
 
 ## 2. Two threads, one thesis
 
 | Thread | Origin | Question | Role in the thesis |
 |---|---|---|---|
-| Conditional coverage | Claude Code sessions (after reading Javanmardi & Hüllermeier 2023) | Does the adaptivity of CQR preserve coverage where it narrows? Seed 0: SCP 1.00 near failure and 0.49 mid-life; CQR ≈ 0.75 near failure | Technical core: measure (H1), correct with Mondrian calibration (H2) |
-| Decision value | Tutor, 14 Oct | A business thesis starts from the decision: price false alarms vs missed failures, sweep cost ratios, report break-even in euros, test generalisation | Main thread and framing: H3, H4, optional H5 |
+| Conditional coverage | Claude Code sessions (after reading Javanmardi & Hüllermeier 2023) | Where does a 90 % interval miss, and can calibration per life stage fix it? | Technical core: measure (H1), correct with Mondrian calibration (H2) |
+| Decision value | Tutor, 14 Oct | A business thesis starts from the decision: price false alarms vs missed failures, sweep cost ratios, report break-even in euros, test generalisation, let planners adjust | Main thread and framing: H3–H6, the planner prototype |
 
-They meet in one place. Over-coverage near failure means a lower bound that is too low, so alerts come too early and engine life is wasted. Misses on the *below* side mean a lower bound that is too high, so alerts come too late and engines fail. The decision layer turns both into euros. A first FD001 run (README §8) already shows the stakes: acting on the raw point prediction let 7 of 15 engines fail, and a tuned safety margin was the rule to beat.
+They meet in one place. Over-coverage near failure means a lower bound that is too low, so alerts come too early and engine life is wasted. Misses on the *below* side mean a lower bound that is too high, so alerts come too late and engines fail. The decision layer turns both into euros. Result (README §8.2): acting on the raw point prediction lets 53 engines in 100 fail; a safety margin tuned on the few calibration engines lets 2–3 fail; a fixed 90 % split-conformal interval lets none fail and, with 10 cycles of notice, is cheaper once a failure costs more than about €4.4 M (median of 40 runs, half between €3.2 M and €6.1 M). The over-coverage near failure that H1 flags as a calibration flaw is exactly what protects the fleet at high cost ratios.
 
 ## 3. Literature audit: what is taken
 
@@ -35,7 +35,7 @@ Not peer-reviewed but relevant: a public GitHub project (HermosuraM/rul-predicti
 
 ## 4. The gap, stated so it survives a tribunal
 
-1. **Where coverage fails, measured properly.** Coverage stratified by *predicted* RUL along whole test trajectories (all cycles of the internal-test engines), with engine-level bootstrap intervals, 10 seeds, four subsets. Robinson's bins use one final window per engine and a few dozen engines per bin; BenAbdennour pools an "urgent zone".
+1. **Where coverage fails, measured properly.** Coverage stratified by *predicted* and by *true* RUL along whole trajectories of every run-to-failure engine (cross-fitted), with the miss direction, 10 seeds, four subsets. Robinson's bins use one final window per engine and a few dozen engines per bin; BenAbdennour pools an "urgent zone".
 2. **A correction with a known price.** Mondrian (group-conditional) calibration over predicted-RUL strata chosen by what the maintenance decision needs, with the width it costs per stratum. Exact conditional coverage is impossible without assumptions (Barber et al., 2019), so the claim is coverage *within chosen strata*, not everywhere (Vovk, 2012; Boström & Johansson, 2020; Gibbs, Cherian & Candès, 2025).
 3. **The euro value.** Interval-triggered vs *tuned* point-triggered maintenance on the same engines, swept over failure : planned cost ratios, break-even in euros. Lee & Mitici compared point and distribution at one ratio; Kamariotis et al. and Koutas & Straub swept ratios without a point baseline; conformal papers stop before the decision.
 
@@ -47,7 +47,7 @@ Not peer-reviewed but relevant: a public GitHub project (HermosuraM/rul-predicti
 - "Time-weighted methods handle our problem." Javanmardi & Hüllermeier's weighted method addresses drift between calibration and test. Within-engine autocorrelation, which shrinks the effective sample size, is a different problem; say so explicitly.
 - "Adaptive width is our novelty." Their normalised scores are already adaptive. Our contribution is *checking* adaptive width and pricing it.
 
-**Before relying on the mid-life 0.49:** most of those split-conformal misses are on the *above* side (the engine is healthier than predicted), which is consistent with the RUL cap of 125. Healthy-looking engines are labelled 125 and bounds are clipped at 125. Check the cap's effect, for example by re-running with a cap of 130 or with uncapped evaluation, before building on it.
+**Still to check: the RUL cap.** Part of the split-conformal mid-life misses (0.70 coverage at predicted RUL 75–100) are on the *above* side (the engine is healthier than predicted), which is consistent with the cap of 125: healthy-looking engines are labelled 125 and bounds are clipped at 125. Re-run with a cap of 130 or uncapped evaluation before the thesis relies on that number. The late-side misses by true RUL, which drive the decision results, are not affected by the cap (true RUL ≤ 75).
 
 ## 5. Decision economics
 
@@ -66,11 +66,18 @@ Not peer-reviewed but relevant: a public GitHub project (HermosuraM/rul-predicti
 | Spare engine lease, CFM56-7B / LEAP-1A | ~US$95,000 / 145,000–155,000 per month | IBA (2024) |
 | Same-day cancellation, narrow-body / wide-body | €25,720 / €123,900 | EUROCONTROL Standard Inputs (2026) |
 
-From these, a missed failure adds about €0.43–1.10 million over a planned removal, and an early removal wasting ~1,000 flight hours costs roughly €0.05–0.27 million (our own estimate). That gives a realistic failure : planned ratio of about **2 : 1 to 25 : 1**, or about 1,000 : 1 if a false alarm only triggers an inspection. Sweep 1, 2, 3, 5, 10, 20, 50, 100 and shade 2–25. Do not cite the common claim that unscheduled maintenance costs "3–5×" scheduled: no credible source was found.
+From these, a missed failure adds about €0.43–1.10 million over a planned removal (our own estimate from the rows above).
+
+**How the ratio is defined in the code.** The decision model (`src/decision.py`) uses a renewal-reward cost rate: total event cost divided by cycles flown. Wasted life is therefore already priced by the denominator (an engine removed early flies fewer cycles per removal), and the ratio compares only the two *events*: the full cost of an unplanned removal over the full cost of a planned one. With a planned shop visit of about €1.0 million (`PLANNED_REMOVAL_EUR` in `src/config.py`), the extra €0.43–1.10 million gives a ratio of about **1.4 to 2.1** for the shop-visit cost alone. Adding disruption (5–7 days grounded, spare-engine lease, cancellations, secondary damage) can push a single event to several times the planned cost, so we treat **1.4–10** as the plausible band, shade it in every figure, and read ratios above 10 as stress tests. The earlier "2 : 1 to 25 : 1" figure mixed wasted life into the ratio and is superseded.
+
+Sweep 1, 1.5, 2, 3, 5, 10, 20, 50, 100 (`COST_RATIOS`). Results are reported in units of one planned removal and converted to euros by multiplying by €1.0 million: a break-even ratio of 3 reads "the interval pays off when an unplanned failure costs more than about €3 million". If a false alarm only triggers an inspection (US$200, Koops 2018) the ratio is about 1,000 : 1 and a different model applies (alert → inspect → decide); out of scope. Do not cite the common claim that unscheduled maintenance costs "3–5×" scheduled: no credible source was found.
 
 **Who pays.** Under power-by-the-hour contracts (Rolls-Royce TotalCare, GE TrueChoice) the engine maker bears unscheduled shop visits, while the airline bears the disruption. State the cost ratio from one party's point of view.
 
 ## 6. Behavioural design notes (tutor's suggestion)
+
+**Measured (README §8.5):** moving a safety margin by ± 5 cycles from its optimum costs under 4 %; moving a confidence level one step riskier costs 1–29 %, one step more cautious 0.2–4 %. So planner freedom should be asymmetric: free towards caution, capped towards risk. `app/planner.html` implements a bounded adjustment of ± 2 / ± 5 steps.
+
 
 - Losing trust in an algorithm after seeing it err is well documented (Dietvorst, Simmons & Massey 2015) but not universal (Logg, Minson & Moore 2019).
 - People use an imperfect algorithm when they can adjust its *outputs*, even slightly (Dietvorst et al. 2018). A planner-adjustable threshold extends that finding; it does not repeat it.
@@ -78,7 +85,9 @@ From these, a missed failure adds about €0.43–1.10 million over a planned re
 - False alarms lower compliance with future true alarms (Bliss et al. 1995; LeClerc & Joslyn 2015). Consider a sensitivity scenario in which trust erodes with the false-alarm rate.
 - Design implication: show "maintain now / defer" with the interval, plus the false-alarm rate, miss rate and expected cost of each threshold setting.
 
-## 7. Optional generalisation: M5 Uncertainty (retail)
+## 7. Generalisation: M5 Uncertainty (retail)
+
+**Built (README §8.4):** `src/newsvendor.py`, `src/m5.py`, `src/retail.py`. On synthetic demand a constant conformal shift behaves like a tuned buffer (the retail twin of "split conformal = point + margin"), and a conformalised quantile model is cheaper from a stockout : overstock ratio of about 1–2. The M5 run needs the Kaggle files in `data/m5/`.
 
 Same structure: missed failure ↔ stockout, false alarm ↔ overstock; order the τ-quantile of demand with τ = c_stockout / (c_stockout + c_overstock). M5 has 42,840 hierarchical Walmart series and nine quantiles, scored with pinball loss, which is itself a newsvendor cost (Makridakis et al. 2022). Reduced scope: the 154 aggregated series (levels 1–9), 28-day horizon, rolling-origin conformal calibration, newsvendor cost across the same ratio sweep. Closest precedent: Theodorou, Spiliotis & Assimakopoulos (2025), who show on M5 that the most accurate method is often not the best for inventory when lost sales cost more than holding stock.
 

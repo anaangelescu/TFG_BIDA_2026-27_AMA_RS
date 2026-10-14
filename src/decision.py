@@ -197,19 +197,60 @@ def sweep(
 
 
 def break_even(table: pd.DataFrame, baseline: str, challenger: str, metric: str = "cost_per_1000_cycles") -> float:
-    """Smallest cost ratio at which `challenger` becomes cheaper than `baseline`.
+    """Cost ratio above which `challenger` is cheaper than `baseline` at every larger tested ratio.
 
-    Linear interpolation on log(ratio) between the two sweep points that bracket the sign change.
-    Returns 0.0 if the challenger is cheaper everywhere and NaN if it never is.
+    "Stays cheaper" rather than "first becomes cheaper": at a ratio of 1 a failure costs no more than a
+    planned removal, so a rule that lets engines fail can look cheapest there, and medians over seeds
+    can cross back and forth. The crossing is linearly interpolated on log(ratio) between the last tested
+    ratio where the challenger is not cheaper and the next one. Returns 0.0 if the challenger is cheaper
+    at every tested ratio and NaN if it is not cheaper at the largest one.
     """
     wide = table.pivot(index="ratio", columns="rule", values=metric).sort_index()
     gap = (wide[baseline] - wide[challenger]).to_numpy()  # > 0 means the challenger is cheaper
     ratios = wide.index.to_numpy(float)
-    if gap[0] > 0:
+    not_cheaper = np.flatnonzero(gap <= 0)
+    if not_cheaper.size == 0:
         return 0.0
-    cheaper = np.flatnonzero(gap > 0)
-    if cheaper.size == 0:
+    i = int(not_cheaper[-1])
+    if i == len(gap) - 1:
         return float("nan")
-    i = int(cheaper[0])
-    x0, x1, g0, g1 = np.log(ratios[i - 1]), np.log(ratios[i]), gap[i - 1], gap[i]
+    x0, x1, g0, g1 = np.log(ratios[i]), np.log(ratios[i + 1]), gap[i], gap[i + 1]
     return float(np.exp(x0 + (x1 - x0) * (-g0) / (g1 - g0)))
+
+
+# --------------------------------------------------------------------------- fast threshold curves
+def threshold_outcomes(frame: pd.DataFrame, score, thresholds, horizon: int) -> pd.DataFrame:
+    """Outcomes of the rule "alert when score <= threshold" for MANY thresholds at once (checks every cycle).
+
+    Same maintenance model as `simulate`, vectorised over thresholds: the first alert is the first cycle
+    where the running minimum of the score drops to the threshold. One row per threshold with fleet
+    sums (failures, planned, wasted_cycles, cycles_flown), so costs for any ratio follow directly.
+    Used to tune margins, replacement ages and confidence levels quickly.
+    """
+    _check_frame(frame)
+    thr = np.atleast_1d(np.asarray(thresholds, float))
+    df = pd.DataFrame({"unit": frame["unit"].to_numpy(), "cycle": frame["cycle"].to_numpy(), "score": np.asarray(score, float)})
+    df = df.sort_values(["unit", "cycle"], kind="stable")
+    failures = np.zeros(len(thr)); planned = np.zeros(len(thr)); wasted = np.zeros(len(thr)); flown = np.zeros(len(thr))
+    for _, g in df.groupby("unit", sort=False):
+        cycles = g["cycle"].to_numpy(); T = cycles[-1]
+        run_min = np.minimum.accumulate(g["score"].to_numpy())
+        idx = np.searchsorted(-run_min, -thr, side="left")        # first i with run_min[i] <= thr
+        alert = np.where(idx < len(cycles), cycles[np.minimum(idx, len(cycles) - 1)], np.inf)
+        removal = alert + horizon
+        ok = removal <= T
+        planned += ok; failures += ~ok
+        wasted += np.where(ok, T - removal, 0.0)
+        flown += np.where(ok, removal, T)
+    return pd.DataFrame({"threshold": thr, "engines": df["unit"].nunique(), "failures": failures, "planned": planned,
+                         "wasted_cycles": wasted, "cycles_flown": flown})
+
+
+def cost_rate(curve: pd.DataFrame, costs: Costs) -> np.ndarray:
+    """Cost per 1,000 cycles flown for each row of a `threshold_outcomes` curve."""
+    return 1000.0 * (costs.failure * curve["failures"] + costs.planned * curve["planned"]).to_numpy() / curve["cycles_flown"].to_numpy()
+
+
+def best_threshold(curve: pd.DataFrame, costs: Costs) -> float:
+    """Threshold with the lowest cost rate (first one on ties)."""
+    return float(curve["threshold"].to_numpy()[int(np.argmin(cost_rate(curve, costs)))])

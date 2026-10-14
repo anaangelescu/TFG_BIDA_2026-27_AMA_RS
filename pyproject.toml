@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "tfg-rul-uncertainty"
-version = "0.2.0"
-description = "Where RUL prediction intervals fail to cover and what it costs: conditional coverage and decision value on NASA C-MAPSS (bachelor's thesis)."
+version = "0.3.0"
+description = "When does uncertainty pay? Conditional coverage, decision cost and break-even in euros for interval-triggered maintenance on NASA C-MAPSS, with a retail (newsvendor) generalisation (bachelor's thesis)."
 requires-python = ">=3.10"
 # Exact versions used for the reported numbers are pinned in requirements.txt.
 dependencies = [

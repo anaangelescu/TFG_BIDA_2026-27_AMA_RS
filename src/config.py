@@ -30,6 +30,19 @@ CONFIDENCE_LEVEL = 0.90
 # Engine-level split fractions (train / calibration / internal test).
 FRAC_TRAIN, FRAC_CAL, FRAC_TEST = 0.70, 0.15, 0.15
 
+# --------------------------------------------------------------------------- decision experiment (src/crossfit.py)
+# Engine-level cross-fitting: fold k is evaluated, fold k+1 calibrates (conformal + rule tuning), the rest train.
+N_FOLDS = 5
+# Predicted-RUL strata for Mondrian calibration and for coverage reporting (cycles).
+STRATA_EDGES = (25, 50, 75, 100)
+# Failure : planned-removal cost ratios swept in the decision analysis (synthetic data -> assumptions).
+COST_RATIOS = (1, 1.5, 2, 3, 5, 10, 20, 50, 100)
+# Cycles of notice needed to plan a removal (parts, slot, spare engine).
+HORIZONS = (10, 30)
+# Assumed cost of one planned removal (shop visit), in euros, used ONLY to express results in euros.
+# CFM56-7B planned restoration US$1.1-1.3 million (Aircraft Commerce 2008) ~ EUR 1.0-1.15 million.
+PLANNED_REMOVAL_EUR = 1_000_000
+
 # --------------------------------------------------------------------------- data layout
 SUBSETS = ["FD001", "FD002", "FD003", "FD004"]
 MULTI_REGIME_SUBSETS = {"FD002", "FD004"}  # six operating conditions -> regime normalisation
