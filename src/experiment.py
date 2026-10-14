@@ -103,6 +103,24 @@ def evaluate_conformal(cps: dict, data: SplitData, eval_sets=EVAL_SETS, clip=RUL
     return pd.DataFrame(rows), preds
 
 
+def decision_frame(data: SplitData, name: str, pred, lower=None) -> pd.DataFrame:
+    """Per-cycle frame for src.decision: unit, cycle, pred (and lower) for every row of one engine set.
+
+    Only for the run-to-failure sets ("train", "cal", "test"): decisions need complete engines, so
+    the truncated official file is refused. Cycles come from the raw file (X holds features only).
+    """
+    assert name != "official", "official test engines are truncated; use 'cal' or 'test' engines"
+    train_df, _, _ = load_subset(data.subset)
+    idx = data.X(name).index
+    frame = pd.DataFrame(
+        {"unit": data.groups(name).to_numpy(), "cycle": train_df.loc[idx, "cycle"].to_numpy(), "pred": np.asarray(pred, float)},
+        index=idx,
+    )
+    if lower is not None:
+        frame["lower"] = np.asarray(lower, float)
+    return frame
+
+
 def log_official(table: pd.DataFrame, subset: str, seed: int) -> None:
     """Append the official-test rows of a metrics table to results/runs.csv (one row per model)."""
     for _, r in table[table["eval_set"] == "official"].iterrows():

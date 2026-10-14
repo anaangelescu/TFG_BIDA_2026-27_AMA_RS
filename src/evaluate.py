@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import numpy as np
+import pandas as pd
 
 
 def rmse(y_true, y_pred) -> float:
@@ -35,3 +36,19 @@ def point_metrics(y_true, y_pred) -> dict[str, float]:
 
 def interval_metrics(y_true, lower, upper) -> dict[str, float]:
     return {"coverage": coverage(y_true, lower, upper), "mean_width": mean_width(lower, upper)}
+
+
+def coverage_by_stratum(y_true, lower, upper, strata) -> pd.DataFrame:
+    """Coverage per stratum, with the direction of the misses.
+
+    `below` = share of rows whose truth lies under the lower bound (for RUL: the engine has LESS life
+    than the interval admits, i.e. a late alert); `above` = share above the upper bound. Strata for
+    calibration must come from PREDICTED RUL; true-RUL strata are for diagnostic plots only.
+    """
+    y = np.asarray(y_true, float)
+    lo, hi = np.asarray(lower, float), np.asarray(upper, float)
+    df = pd.DataFrame({"stratum": np.asarray(strata), "covered": (lo <= y) & (y <= hi), "below": y < lo, "above": y > hi, "width": hi - lo})
+    out = df.groupby("stratum", observed=True).agg(
+        n=("covered", "size"), coverage=("covered", "mean"), below=("below", "mean"), above=("above", "mean"), mean_width=("width", "mean")
+    )
+    return out
