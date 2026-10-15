@@ -16,8 +16,33 @@ Bachelor's thesis (TFG). Ana-Maria Angelescu & Rune Snauwaert, Business Intellig
 | Methods | Linear and LightGBM; split conformal (SCP), Mondrian conformal by predicted-RUL stage, conformalized quantile regression (CQR); 12 maintenance rules incl. age-based replacement, tuned safety margin and perfect information |
 | Retail generalisation | Done on synthetic demand (newsvendor, `python -m src.run retail`); real M5 data loader ready, needs the Kaggle files |
 | Product prototype | `app/planner.html`: the removal planner (pick the failure cost, see the cheapest rule, move its threshold by hand) |
-| Headline | §8 |
+| Headline | [Key results](#key-results) below; full tables in §8 |
 | Next | Agree framing with the tutor; LSTM (H4); M5 run; 4–6 practitioner interviews on costs and on how much override planners need |
+
+---
+
+## Key results
+
+NASA C-MAPSS FD001–FD004, all 709 run-to-failure engines, 10 seeds, every engine predicted by a model that never saw it. LightGBM, 90 % intervals, a planned removal set at €1.0 M. Full tables and caveats in [§8](#8-results).
+
+| Question | What we found |
+|---|---|
+| Do 90 % intervals cover 90 % at every stage of an engine's life? | **No.** Split conformal covers 99 % of cycles near failure but only 70 % with 75–100 cycles left. Every method is wrong "too late" 11–16 % of the time when 25–50 cycles are left (it should be 5 %). |
+| Does calibrating per life stage (Mondrian) fix it? | Partly. It gives 88–90 % in every *predicted* stage, but not the "too late" misses that cause failures. |
+| What if the planner acts on the raw prediction? | **53 of 100 engines fail.** |
+| And on the prediction plus a tuned safety margin? | A strong baseline, but tuned on few engines it still lets **2–3 of 100** fail. |
+| When does acting on a 90 % interval pay off? (10 cycles of notice) | Once an unplanned failure costs more than **≈ 4.4 × a planned removal, about €4.4 M** (half of the 40 runs between €3.2 M and €6.1 M; it breaks even in all 40). No engine fails; it gives up 31 cycles of life per engine instead of 13. |
+| And with 30 cycles of notice? | Fixed 90 % intervals let 5–9 of 100 engines fail and rarely pay off. Only a CQR interval with a tuned level still wins in most runs (27 of 40, from about 5 ×). |
+| Does the idea work outside aviation? | On synthetic retail demand, yes: an adaptive quantile forecast beats a tuned stock buffer from a stockout : overstock cost ratio of about 1–2. |
+| How much can a planner adjust the threshold? | Moving a safety margin by ± 5 cycles costs under 4 %. Moving a confidence level one step riskier costs up to 29 %, one step more cautious at most about 4 %. |
+
+![Cost of each maintenance rule against the failure : planned cost ratio, 10 cycles of notice](figures/crossfit_cost_curves_h10.png)
+
+*Cost per 1,000 cycles flown (in planned removals) as an unplanned failure gets more expensive. The shaded band is the plausible range (1.4–10 ×). The tuned safety margin (orange) and the tuned CQR level (brown) are cheapest at low ratios; the fixed 90 % intervals (green, red) stay almost flat and win as failures get dearer; replacing every engine at a fixed age (blue) is the most expensive sensible rule once a failure costs more than a planned removal.*
+
+![Coverage of 90 % intervals by remaining-life stage](figures/crossfit_coverage_by_stratum.png)
+
+*Left: by predicted remaining life, which is what the planner sees. Right: by true remaining life, which decides whether an engine fails. The dashed line is the 90 % target.*
 
 ---
 
@@ -220,7 +245,7 @@ Share of rows with the truth **below** the lower bound (alert too late) by **tru
 | Mondrian | 0.047 | **0.114** | 0.238 | 0.208 | 0.003 |
 | CQR | 0.071 | **0.139** | 0.142 | 0.099 | 0.031 |
 
-Figure: `figures/crossfit_coverage_by_stratum.png`. The pattern holds in each subset (notebook 06).
+The pattern holds in each subset (notebook 06); the figure is under [Key results](#key-results).
 
 ### 8.2 What it costs (H3; notebook 07)
 
@@ -257,7 +282,13 @@ Why the tuned margin loses at high ratios: on *n* calibration engines it picks t
 
 The textbook level (critical ratio τ = 1/(1 + ratio)) is too low at moderate ratios: it prices acting early as a whole removal, while under the cost rate it only costs some wasted life. It only competes above 20 ×.
 
-Figures: `figures/crossfit_cost_curves_h10.png`, `crossfit_cost_curves_h30.png`, `crossfit_dial_tradeoff_h10.png`.
+![Cost of each rule against the cost ratio, 30 cycles of notice](figures/crossfit_cost_curves_h30.png)
+
+*With 30 cycles of notice the fixed 90 % intervals no longer stay flat: they let 5–9 engines in 100 fail, so their cost climbs with the failure cost.*
+
+![Failures against wasted life for every setting of each rule](figures/crossfit_dial_tradeoff_h10.png)
+
+*Every setting of every dial, 10 cycles of notice: failures per 100 engines against cycles of life thrown away per engine. Closer to the bottom-left corner is better. All the prediction-based rules sit close together and far below replacing at a fixed age (purple): the sensors are worth a lot; which rule turns them into an alert matters less than how its dial is set.*
 
 ### 8.3 Accuracy is not the decision (H4, partial)
 
