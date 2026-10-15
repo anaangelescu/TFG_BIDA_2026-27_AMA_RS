@@ -36,6 +36,14 @@ NASA C-MAPSS FD001–FD004, all 709 run-to-failure engines, 10 seeds, every engi
 | Does the idea work outside aviation? | On synthetic retail demand, yes: an adaptive quantile forecast beats a tuned stock buffer from a stockout : overstock cost ratio of about 1–2. |
 | How much can a planner adjust the threshold? | Moving a safety margin by ± 5 cycles costs under 4 %. Moving a confidence level one step riskier costs up to 29 %, one step more cautious at most about 4 %. |
 
+![Break-even failure cost in euros for each interval rule against a tuned safety margin](figures/readme_break_even_eur.png)
+
+*The headline in euros. With 10 cycles of notice, a 90 % split-conformal interval becomes cheaper than a tuned safety margin once an unplanned failure costs more than about €4.4 M, and it does so in all 40 runs. With 30 cycles of notice only the CQR interval with a tuned level still pays off in most runs.*
+
+![Failures and wasted engine life per rule](figures/readme_rule_outcomes.png)
+
+*What each rule does to a fleet of 100 engines. Acting on the raw prediction lets half the engines fail; the split-conformal and Mondrian 90 % intervals let (almost) none fail but give up more engine life than the tuned margin. That trade is what the break-even prices.*
+
 ![Cost of each maintenance rule against the failure : planned cost ratio, 10 cycles of notice](figures/crossfit_cost_curves_h10.png)
 
 *Cost per 1,000 cycles flown (in planned removals) as an unplanned failure gets more expensive. The shaded band is the plausible range (1.4–10 ×). The tuned safety margin (orange) and the tuned CQR level (brown) are cheapest at low ratios; the fixed 90 % intervals (green, red) stay almost flat and win as failures get dearer; replacing every engine at a fixed age (blue) is the most expensive sensible rule once a failure costs more than a planned removal.*
@@ -43,6 +51,14 @@ NASA C-MAPSS FD001–FD004, all 709 run-to-failure engines, 10 seeds, every engi
 ![Coverage of 90 % intervals by remaining-life stage](figures/crossfit_coverage_by_stratum.png)
 
 *Left: by predicted remaining life, which is what the planner sees. Right: by true remaining life, which decides whether an engine fails. The dashed line is the 90 % target.*
+
+![Retail stocking rules compared with a tuned buffer](figures/readme_retail.png)
+
+*The same decision framework on synthetic retail demand. A constant conformal shift behaves like a tuned stock buffer (the retail twin of "split conformal = point prediction + margin"); the adaptive, conformalised quantile model is cheaper from about 3 : 1 on the median of 5 seeds and up to 18 % cheaper as stockouts get more expensive.*
+
+![The Engine Removal Planner](figures/readme_planner.png)
+
+*The planner prototype (`app/planner.html`, open it in a browser): type the cost of a failure and see the recommended rule, the euro break-even and every rule tested on unseen engines.*
 
 ---
 
@@ -200,6 +216,7 @@ export CMAPSS_DATA_DIR=/path/to/CMAPSSData          # or put the files in data/r
 python -m src.run crossfit --subsets FD001 FD002 FD003 FD004 --seeds 0-9    # ~40 min on 2 cores
 python -m src.run retail --data synthetic --seeds 0-4                       # ~10 min; --data m5 with the Kaggle files
 python app/build_planner.py                                                  # rebuilds app/planner.html from results/
+python -m src.readme_figures                                                 # redraws the README result figures
 jupyter nbconvert --to notebook --execute --inplace notebooks/06_conditional_coverage.ipynb notebooks/07_decisions.ipynb notebooks/08_retail_generalisation.ipynb
 ```
 
@@ -346,6 +363,7 @@ TFG_BIDA_2026-27_AMA_RS/              # raw data lives OUTSIDE the repo or in da
 │   ├── newsvendor.py    # retail twin of the decision layer
 │   ├── m5.py · retail.py  # M5 loader + synthetic stand-in; retail experiment
 │   ├── run.py           # python -m src.run crossfit | retail
+│   ├── readme_figures.py  # python -m src.readme_figures: the README result charts
 │   ├── results.py · experiment.py   # week-1 notebook glue (results/runs.csv)
 │   └── plots.py         # EDA, interval, coverage-by-stratum, cost-curve, trade-off figures
 ├── notebooks/           # 01 EDA … 05 seeds (week 1); 06 coverage by stratum; 07 decisions; 08 retail

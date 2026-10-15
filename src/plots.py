@@ -195,3 +195,134 @@ def plot_dial_tradeoff(points: dict[str, pd.DataFrame], title: str) -> plt.Figur
     ax.legend(fontsize=8)
     fig.tight_layout()
     return fig
+
+
+# --------------------------------------------------------------------------- README result figures (business view)
+# Reference palette (light): surface, ink, recessive grid, categorical slots 1-4 in fixed order.
+_SURFACE, _INK, _INK2, _GRID = "#fcfcfb", "#0b0b0b", "#52514e", "#e4e3df"
+_SERIES = ("#2a78d6", "#eb6834", "#1baf7a", "#eda100")
+_BAND = "#f6e7c4"
+
+
+def _style(ax):
+    ax.set_facecolor(_SURFACE)
+    for side in ("top", "right"):
+        ax.spines[side].set_visible(False)
+    for side in ("left", "bottom"):
+        ax.spines[side].set_color(_GRID)
+    ax.tick_params(colors=_INK2, labelsize=9)
+    ax.xaxis.label.set_color(_INK2); ax.yaxis.label.set_color(_INK2)
+    ax.title.set_color(_INK)
+
+
+def plot_break_even_eur(be: pd.DataFrame, band: tuple[float, float], planned_eur_m: float = 1.0,
+                        order: list[str] | None = None) -> plt.Figure:
+    """Failure cost (EUR M) above which each interval rule beats the tuned safety margin, one panel per notice period.
+
+    `be` is src.summarize.break_even_runs(...): one row per (horizon, challenger) with median, q25, q75 (ratios,
+    inf = never) and runs / runs_breaking_even. Dot = median run, line = middle half of the runs.
+    """
+    order = order or list(dict.fromkeys(be["challenger"]))
+    horizons = sorted(be["horizon"].unique())
+    lo, hi = 1.0, 100.0
+    fig, axes = plt.subplots(1, len(horizons), figsize=(6.2 * len(horizons), 0.62 * len(order) + 1.6), sharey=True, squeeze=False)
+    fig.patch.set_facecolor(_SURFACE)
+    for ax, h in zip(axes[0], horizons):
+        _style(ax)
+        ax.axvspan(band[0] * planned_eur_m, band[1] * planned_eur_m, color=_BAND, zorder=0)
+        ax.text(np.sqrt(band[0] * band[1]) * planned_eur_m, len(order) - 0.35, "plausible range", ha="center", va="bottom",
+                fontsize=8, color=_INK2)
+        for i, rule in enumerate(order):
+            r = be[(be["horizon"] == h) & (be["challenger"] == rule)].iloc[0]
+            y = len(order) - 1 - i
+            med, q25, q75 = (float(r[c]) for c in ("median", "q25", "q75"))
+            label_runs = f"{int(r['runs_breaking_even'])}/{int(r['runs'])} runs"
+            if np.isfinite(med):
+                x0, x1 = max(q25, lo / planned_eur_m), min(q75, hi / planned_eur_m)
+                ax.plot([x0 * planned_eur_m, x1 * planned_eur_m], [y, y], color=_SERIES[0], lw=2, solid_capstyle="round", zorder=2)
+                if not np.isfinite(q75):
+                    ax.annotate("", xy=(hi, y), xytext=(x1 * planned_eur_m * 0.8, y),
+                                arrowprops=dict(arrowstyle="->", color=_SERIES[0], lw=1.5))
+                xm = max(med, lo / planned_eur_m) * planned_eur_m
+                ax.plot(xm, y, "o", ms=8, color=_SERIES[0], mec=_SURFACE, mew=2, zorder=3)
+                txt = f"€{med * planned_eur_m:.1f} M" if med > 0 else "always"
+                ax.text(xm, y + 0.22, f"{txt}  ·  {label_runs}", fontsize=8.5, color=_INK, ha="center", va="bottom")
+            else:
+                ax.text(lo * 1.08, y, f"does not pay off in most runs  ·  {label_runs}", fontsize=8.5, color=_INK2, va="center")
+        ax.set_xscale("log")
+        ax.set_xlim(lo, hi)
+        ax.set_xticks([1, 2, 5, 10, 20, 50, 100], ["€1 M", "€2 M", "€5 M", "€10 M", "€20 M", "€50 M", "€100 M"])
+        ax.set_ylim(-0.6, len(order) - 0.1)
+        ax.set_yticks(range(len(order)), list(reversed(order)), color=_INK)
+        ax.grid(axis="x", color=_GRID, lw=0.8)
+        ax.set_axisbelow(True)
+        ax.set_xlabel("cost of one unplanned failure (planned removal = €1 M)")
+        ax.set_title(f"{h} cycles of notice", loc="left", fontsize=11, fontweight="semibold")
+    fig.suptitle("From which failure cost does acting on the interval beat a tuned safety margin?", x=0.01, ha="left",
+                 fontsize=12.5, fontweight="semibold", color=_INK)
+    fig.text(0.01, -0.03, "Dot: median of 40 runs (4 subsets × 10 seeds). Line: middle half of the runs; arrow = some runs never break even.",
+             fontsize=8.5, color=_INK2)
+    fig.tight_layout()
+    return fig
+
+
+def plot_rule_outcomes(rows: pd.DataFrame, title: str) -> plt.Figure:
+    """Two panels side by side: failures per 100 engines and wasted cycles per engine, one bar per rule.
+
+    `rows` has columns rule, fail100, waste (one row per rule, in display order).
+    """
+    n = len(rows)
+    fig, axes = plt.subplots(1, 2, figsize=(11, 0.48 * n + 1.5), sharey=True)
+    fig.patch.set_facecolor(_SURFACE)
+    y = np.arange(n)[::-1]
+    for ax, col, label, color in ((axes[0], "fail100", "failures per 100 engines", _SERIES[1]),
+                                  (axes[1], "waste", "cycles of life wasted per engine", _SERIES[0])):
+        _style(ax)
+        vals = rows[col].to_numpy(float)
+        ax.barh(y, vals, height=0.62, color=color, edgecolor=_SURFACE, linewidth=2)
+        top = max(vals.max(), 1.0)
+        for yi, v in zip(y, vals):
+            ax.text(v + top * 0.015, yi, f"{v:.1f}", va="center", fontsize=8.5, color=_INK)
+        ax.set_xlim(0, top * 1.15)
+        ax.set_title(label, loc="left", fontsize=10.5, color=_INK)
+        ax.grid(axis="x", color=_GRID, lw=0.8); ax.set_axisbelow(True)
+    axes[0].set_yticks(y, rows["rule"], color=_INK)
+    fig.suptitle(title, x=0.01, ha="left", fontsize=12.5, fontweight="semibold", color=_INK)
+    fig.tight_layout()
+    return fig
+
+
+def plot_retail_relative(table: pd.DataFrame, baseline: str, title: str, cap: float = 2.0) -> plt.Figure:
+    """Cost of each stocking rule relative to `baseline` (= 1) across stockout : overstock ratios, log x.
+
+    `table` is rules x ratios (median cost per day). Lines above `cap` are clipped and labelled.
+    """
+    rel = table.div(table.loc[baseline], axis=1)
+    x = rel.columns.astype(float)
+    fig, ax = plt.subplots(figsize=(8.5, 4.6))
+    fig.patch.set_facecolor(_SURFACE); _style(ax)
+    ends = {}
+    for color, rule in zip(_SERIES, rel.index):
+        v = rel.loc[rule].to_numpy(float)
+        vc = np.minimum(v, cap)
+        ax.plot(x, vc, "-o", color=color, lw=2, ms=4.5, mec=_SURFACE, mew=1)
+        ends[rule] = (vc[-1], rule if v[-1] <= cap else f"{rule} (off scale: {v[-1]:.1f}× at {x[-1]:.0f} : 1)")
+    # direct labels at the line ends, nudged apart so they never overlap
+    placed, gap = [], 0.06
+    for rule, (y, lab) in sorted(ends.items(), key=lambda kv: kv[1][0]):
+        y_lab = max(y, placed[-1] + gap) if placed else y
+        placed.append(y_lab)
+        ax.annotate(lab, (x[-1], y), xytext=(x[-1] * 1.12, y_lab), textcoords="data", va="center", fontsize=8.5, color=_INK)
+    ax.axhline(1.0, color=_INK2, lw=0.8, ls=":")
+    ax.set_xscale("log")
+    ax.set_xticks(list(x), [f"{v:g}" for v in x])
+    ax.set_ylim(0.7, cap * 1.03)
+    ax.set_yticks([0.8, 1.0, 1.2, 1.4, 1.6, 1.8, 2.0], ["−20 %", "same", "+20 %", "+40 %", "+60 %", "+80 %", "+100 %"])
+    ax.set_xlabel("stockout : overstock cost ratio")
+    ax.set_ylabel(f"cost per day vs {baseline}")
+    ax.grid(color=_GRID, lw=0.8); ax.set_axisbelow(True)
+    ax.set_title(title, loc="left", fontsize=12, fontweight="semibold")
+    ax.set_xlim(x[0] * 0.9, x[-1] * 1.1)
+    ax.set_ylim(min(0.7, min(p for p in placed) - 0.08), cap * 1.03)
+    fig.tight_layout()
+    return fig
